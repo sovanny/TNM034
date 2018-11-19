@@ -2,7 +2,7 @@
 % Read image file
 clear
 clc
-input_image = imread("Images_Training/im13s.jpg");
+input_image = imread('Images_Training/im13s.jpg');
 
 %% Preprocessing - Make binary
 
@@ -65,33 +65,49 @@ rot_degree = 0;
 
 for degree = -0.1:0.01:0.1
     temp_sum = sum(imrotate(image_rotated, degree), 2);
-    imshow(imrotate(image_rotated, degree))
     [temp_pks, temp_locs] = findpeaks(temp_sum);
-    sum(maxk(temp_pks, 5))
-    if(sum(maxk(temp_pks, 5)) > highest_maxes)
+    highest_val = sum(maxk(temp_pks, 5));
+    if(highest_val > highest_maxes)
         highest_peaks = temp_pks;
+        highest_locs = temp_locs;
         rot_degree = degree;
-        highest_maxes = sum(maxk(temp_pks, 5));
+        highest_maxes = highest_val;
     end
 end
         
 new_rotated_image = imrotate(image_rotated, rot_degree);
-imshow(new_rotated_image);
+figure, imshow(new_rotated_image);
 
 %% save positions
 peak_threshold = floor(0.6* max(highest_peaks));
 % thresholds the values so that the lower ones are zero
 filtered_peaks = highest_peaks.*(highest_peaks>peak_threshold);
+y_positions = highest_locs(filtered_peaks>0);
 
-plot(filtered_peaks)
+%previous_pos = y_positions(1);
 
-for peak = highest_peaks
-    if(peak > peak_threshold)
-        temp_p = peak;
+cluster = {y_positions(1:5); 1:1:5};
+previous_distance = cluster(5,1) - cluster(1,1);
+no_rows = 1;
+staff = 0;
+
+while(size(y_positions)>=5)
+    for pos = 1:1:(size(y_positions)-5)
+
+        if(previous_distance > y_position(1+pos:5+pos))
+            cluster = {y_position(1+pos:5+pos),1+pos:1:5+pos};
+        end
+        if(pos == (size(y_positions)-5))
+            staff(:,no_rows) = cluster(:,1);
+            no_rows = no_rows + 1;
+            y_position(cluster(:,2)) = [];
+        end
     end
 end
 
 %% Segmentation - Thresholding
+
+
 
 %% Segmentation - Cleaning up (removing false objects)
 
