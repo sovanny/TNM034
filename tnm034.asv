@@ -147,7 +147,7 @@
         padding = 0;
         
         start_pixel =staffs(staff_no, 1) - round(distance * margin_up);
-        end_pixel = staffs(staff_no, 5) +  round(distance * margin_down);
+        end_pixel = staffs(staff_no, 5) +   round(distance * margin_down);
         
         if (start_pixel < 1)
             start_pixel = 1;
