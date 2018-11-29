@@ -40,7 +40,7 @@ function something = tnm034(im)
     %figure, imshow(image_binary), hold on;
     for k = 1:length(lines)
        xy = [lines(k).point1; lines(k).point2];
-       %plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','green');
+       plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','green');
     end
 
     %  Rotate
@@ -59,7 +59,7 @@ function something = tnm034(im)
     cropped_image = image_rotated(:,1:(size(image_rotated,2)/2));
     horizontal_summation = sum(cropped_image, 2);
     [pks, locs] = findpeaks(horizontal_summation);
-    %plot(pks , locs, '-o')
+    plot(pks , locs, '-o')
 
     % rotate by 0.01 degrees to find max
     highest_maxes = 0;
@@ -77,9 +77,9 @@ function something = tnm034(im)
         end
     end
 
-    %new_rotated_cropped_image = imrotate(cropped_image, rot_degree);
-    new_rotated_image = imrotate(image_rotated, rot_degree);
-    figure, imshow(new_rotated_image);
+    new_rotated_image = imrotate(cropped_image, rot_degree);
+    new_rotated_image = imrotate(rotated_image, rot_degree);
+    imshow(new_rotated_image);
 
     % save positions
     peak_threshold = floor(0.7* max(highest_peaks));
