@@ -1,9 +1,10 @@
 function something = tnm034(im)
-
+    
     % Image Capture
     % Read image file
 
-    clc
+    %clc
+    %input_image = imread('./Images_Training/Le_1_Example.jpg');
     input_image = imread(im);
 
     % Preprocessing - Make binary
@@ -40,7 +41,7 @@ function something = tnm034(im)
     %figure, imshow(image_binary), hold on;
     for k = 1:length(lines)
        xy = [lines(k).point1; lines(k).point2];
-       plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','green');
+       %plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','green');
     end
 
     %  Rotate
@@ -51,24 +52,28 @@ function something = tnm034(im)
     else
         rotAngle = most_frequent_angle - 90;
     end
-    image_rotated = imrotate(image_binary, rotAngle);
+    image_rotated = imrotate(image_binary, rotAngle, 'bicubic');
 
     % Segmentation - Detect lines and save position
     % also - do some fine rotation adjustments 
-
+    
     cropped_image = image_rotated(:,1:(size(image_rotated,2)/2));
     horizontal_summation = sum(cropped_image, 2);
     [pks, locs] = findpeaks(horizontal_summation);
-    plot(pks , locs, '-o')
+    %plot(pks , locs, '-o')
 
     % rotate by 0.01 degrees to find max
     highest_maxes = 0;
     rot_degree = 0;
 
     for degree = -0.1:0.01:0.1
-        temp_sum = sum(imrotate(cropped_image, degree), 2);
+        temp_sum = sum(imrotate(cropped_image, degree, 'bicubic'), 2);
         [temp_pks, temp_locs] = findpeaks(temp_sum);
-        highest_val = sum(maxk(temp_pks, 5));
+        
+        % For premium users only!
+        %highest_val = sum(maxk(temp_pks, 5)); F
+        sv = sort(temp_pks, 'descend');
+        highest_val = sum(sv(1:5));
         if(highest_val > highest_maxes)
             highest_peaks = temp_pks;
             highest_locs = temp_locs;
@@ -77,12 +82,15 @@ function something = tnm034(im)
         end
     end
 
-    new_rotated_image = imrotate(cropped_image, rot_degree);
-    new_rotated_image = imrotate(rotated_image, rot_degree);
-    imshow(new_rotated_image);
+    %new_rotated_cropped_image = imrotate(cropped_image, rot_degree);
+    %new_rotated_image = imrotate(image_rotated, rot_degree);
 
     % save positions
-    peak_threshold = floor(0.7* max(highest_peaks));
+    % Premium user? Use maxk!
+    sorted_vals = sort(highest_peaks,'descend');
+    top_ten = sorted_vals(1:10);
+    
+    peak_threshold = floor(0.7* median(top_ten));
     % thresholds the values so that the lower ones are zero
     filtered_peaks = highest_peaks.*(highest_peaks>peak_threshold);
     y_positions = highest_locs(filtered_peaks>0);
@@ -119,14 +127,104 @@ function something = tnm034(im)
 
     end
 
-    staff = sortrows(staff);
+    staffs = sortrows(staff);
 
-    something = size(staff, 1);
+   % snurra original-bilden för bästa resultat
+    new_rotated_image = imrotate(input_image, rotAngle + rot_degree);
 
-    %% Segmentation - Thresholding
+    % ta ut sub-bilder. en för varje staff. gör till samma storlek
+    % så vi hela tiden får samma referenskoordinater, så kärnan kan ha samma storlek
+    margin_up = 0.88;
+    margin_down = 0.75;
 
+    img_height = size(new_rotated_image,1);
 
+    binarize_threshold = 0.35;
+    size_sub_image = 120;
+       
+    for staff_no = 1:size(staffs, 1)
+        % Extract each staff
+        distance = (staffs(staff_no, 5) - staffs(staff_no, 1) + 1);
+        padding_top = 0;
+        padding_bot = 0;
+        
+        start_pixel =staffs(staff_no, 1) - round(distance * margin_up);
+        end_pixel = staffs(staff_no, 5) +  round(distance * margin_down);
+        
+        if (start_pixel < 1)
+            padding_top = 1-start_pixel;
+            start_pixel = 1;
+        elseif (end_pixel > img_height)
+            padding_bot = end_pixel - img_height;
+            end_pixel = img_height;
+        end
+      
+        sub_image = new_rotated_image(start_pixel:end_pixel, :,:);
+        sub_image = padarray(sub_image,[padding_top 0], 255, 'pre');
+        sub_image = padarray(sub_image,[padding_bot 0], 255, 'post');
+             
+        % Resize image to a proper size
+        factor = size_sub_image /size(sub_image,1);
+        scaled = imresize(sub_image,factor,'bicubic');
+        image_binary = imcomplement(rgb2gray(scaled));
+        image_binary = imbinarize(image_binary, binarize_threshold);
+        
+        new_staff = staffs(staff_no, :)-start_pixel;
+        new_staff = round(new_staff.*factor);
+        
+%         img_copy = image_binary;
+%         for staff_line = 1:5
+%             img_copy(new_staff(staff_line), :) = 0;
+%         end
+        
+%         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
+%         eroded_image = imerode(image_binary, kernel_matrix);
+%         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;];
+%         dilated_image = imdilate(eroded_image, kernel_matrix);
+        %opened_image = imopen(image_binary,kernel_matrix);
+        %cleaned_image = bwmorph(opened_image, 'clean');
+        %kernel_matrix = [0 0 0; 1 1 1; 0 0 0];
+        %closed_image = imclose(opened_image,kernel_matrix);
+        
+        % IMAGE WITH ONLY NOTE LINES
+        kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;
+            0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0];
+        note_line_img = imopen(image_binary, kernel_matrix);
+        %figure, imshow(note_line_img);
+        
+        % IMAGE WITH ONLY NOTE HEADS
+        kernel_matrix = [ 
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 1 1 1 1 1 0 0 0;
+            0 0 0 1 1 1 1 1 1 1 0 0;
+            0 0 1 1 1 1 1 1 1 1 1 0;
+            0 1 1 1 1 1 1 1 1 1 1 1;
+            1 1 1 1 1 1 1 1 1 1 1 0;
+            0 1 1 1 1 1 1 1 1 1 0 0;
+            0 0 1 1 1 1 1 1 1 0 0 0;
+            0 0 0 1 1 1 1 1 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;];
+        note_head_img = imopen(image_binary, kernel_matrix);
+        %figure, imshow(note_head_img);
+        %figure, imshow(image_binary);
 
+        combined_image(:, :, 1) = note_line_img;
+        combined_image(:,:,2) = note_head_img;
+        combined_image(:,:,3) = 
+        
+        grayImage = 255 * uint8(note_line_img);
+        RGB = cat(3, grayImage, grayImage, grayImage);
+        figure, imshow(combined_image);
+        
+    end
+
+    
+    something = 'hej';
+    
+    %imshow(new_rotated_image);
+    
+    % Segmentation - Thresholding
+    
     %% Segmentation - Cleaning up (removing false objects)
 
     %% Segmentation - Labeling

@@ -1,11 +1,11 @@
-%function something = tnm034(im)
-
+function something = tnm034(im)
+    
     % Image Capture
     % Read image file
 
     %clc
-    input_image = imread('./Images_Training/Le_1_Example.jpg');
-    %input_image = imread(im);
+    %input_image = imread('./Images_Training/Le_1_Example.jpg');
+    input_image = imread(im);
 
     % Preprocessing - Make binary
 
@@ -139,46 +139,91 @@
 
     img_height = size(new_rotated_image,1);
 
-    binarize_threshold = 0.57;
-    
+    binarize_threshold = 0.35;
+    size_sub_image = 120;
+       
     for staff_no = 1:size(staffs, 1)
         % Extract each staff
         distance = (staffs(staff_no, 5) - staffs(staff_no, 1) + 1);
-        padding = 0;
+        padding_top = 0;
+        padding_bot = 0;
         
         start_pixel =staffs(staff_no, 1) - round(distance * margin_up);
         end_pixel = staffs(staff_no, 5) +  round(distance * margin_down);
         
         if (start_pixel < 1)
+            padding_top = 1-start_pixel;
             start_pixel = 1;
-            padding = 0-start_pixel;
         elseif (end_pixel > img_height)
+            padding_bot = end_pixel - img_height;
             end_pixel = img_height;
-            padding = end_pixel - img_height;
         end
       
         sub_image = new_rotated_image(start_pixel:end_pixel, :,:);
-        sub_image = padarray(sub_image,[padding 0], 'both');
+        sub_image = padarray(sub_image,[padding_top 0], 255, 'pre');
+        sub_image = padarray(sub_image,[padding_bot 0], 255, 'post');
              
         % Resize image to a proper size
-        factor = 120 /size(sub_image,1);
+        factor = size_sub_image /size(sub_image,1);
         scaled = imresize(sub_image,factor,'bicubic');
         image_binary = imcomplement(rgb2gray(scaled));
         image_binary = imbinarize(image_binary, binarize_threshold);
+        
+        new_staff = staffs(staff_no, :)-start_pixel;
+        new_staff = round(new_staff.*factor);
+        
+%         img_copy = image_binary;
+%         for staff_line = 1:5
+%             img_copy(new_staff(staff_line), :) = 0;
+%         end
+        
+%         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
+%         eroded_image = imerode(image_binary, kernel_matrix);
+%         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;];
+%         dilated_image = imdilate(eroded_image, kernel_matrix);
+        %opened_image = imopen(image_binary,kernel_matrix);
+        %cleaned_image = bwmorph(opened_image, 'clean');
+        %kernel_matrix = [0 0 0; 1 1 1; 0 0 0];
+        %closed_image = imclose(opened_image,kernel_matrix);
+        
+        % IMAGE WITH ONLY NOTE LINES
+        kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;
+            0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0];
+        note_line_img = imopen(image_binary, kernel_matrix);
+        %figure, imshow(note_line_img);
+        
+        % IMAGE WITH ONLY NOTE HEADS
+        kernel_matrix = [ 
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 1 1 1 1 1 0 0 0;
+            0 0 0 1 1 1 1 1 1 1 0 0;
+            0 0 1 1 1 1 1 1 1 1 1 0;
+            0 1 1 1 1 1 1 1 1 1 1 1;
+            1 1 1 1 1 1 1 1 1 1 1 0;
+            0 1 1 1 1 1 1 1 1 1 0 0;
+            0 0 1 1 1 1 1 1 1 0 0 0;
+            0 0 0 1 1 1 1 1 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;];
+        note_head_img = imopen(image_binary, kernel_matrix);
+        %figure, imshow(note_head_img);
+        %figure, imshow(image_binary);
 
+
+        
+        grayImage1 = 255 * uint8(note_line_img);
+        grayImage2 = 255 * uint8(note_head_img);
+        combined_image = cat(3, grayImage1, grayImage2, grayImage2);
+        figure, imshow(combined_image);
+        
     end
-    
-    %figure, imshow(image_binary);
 
-  
+    
     something = 'hej';
     
     %imshow(new_rotated_image);
     
     % Segmentation - Thresholding
-    %kernel_matrix = [0 1 0; 1 0 1; 0 1 0];
-    %opened_image = imopen(new_rotated_image,kernel_matrix);
-    %figure, imshow(opened_image);
+    
     %% Segmentation - Cleaning up (removing false objects)
 
     %% Segmentation - Labeling
