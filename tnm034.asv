@@ -1,11 +1,11 @@
-%function something = tnm034(im)
-
+function something = tnm034(im)
+    
     % Image Capture
     % Read image file
 
     %clc
-    input_image = imread('./Images_Training/Le_1_Example.jpg');
-    %input_image = imread(im);
+    %input_image = imread('./Images_Training/im3s.jpg');
+    input_image = imread(im);
 
     % Preprocessing - Make binary
 
@@ -130,7 +130,7 @@
     staffs = sortrows(staff);
 
    % snurra original-bilden för bästa resultat
-    new_rotated_image = imrotate(input_image, rotAngle + rot_degree);
+    new_rotated_image = imrotate(input_image, rotAngle + rot_degree, 'bicubic');
 
     % ta ut sub-bilder. en för varje staff. gör till samma storlek
     % så vi hela tiden får samma referenskoordinater, så kärnan kan ha samma storlek
@@ -139,46 +139,106 @@
 
     img_height = size(new_rotated_image,1);
 
-    binarize_threshold = 0.57;
-    
+    binarize_threshold = 0.35;
+    size_sub_image = 120;
+       
     for staff_no = 1:size(staffs, 1)
         % Extract each staff
         distance = (staffs(staff_no, 5) - staffs(staff_no, 1) + 1);
-        padding = 0;
+        padding_top = 0;
+        padding_bot = 0;
         
         start_pixel =staffs(staff_no, 1) - round(distance * margin_up);
-        end_pixel = staffs(staff_no, 5) +   round(distance * margin_down);
+        end_pixel = staffs(staff_no, 5) +  round(distance * margin_down);
         
         if (start_pixel < 1)
+            padding_top = 1-start_pixel;
             start_pixel = 1;
-            padding = 0-start_pixel;
         elseif (end_pixel > img_height)
+            padding_bot = end_pixel - img_height;
             end_pixel = img_height;
-            padding = end_pixel - img_height;
         end
       
         sub_image = new_rotated_image(start_pixel:end_pixel, :,:);
-        sub_image = padarray(sub_image,[padding 0], 'both');
+        sub_image = padarray(sub_image,[padding_top 0], 255, 'pre');
+        sub_image = padarray(sub_image,[padding_bot 0], 255, 'post');
              
         % Resize image to a proper size
-        factor = 120 /size(sub_image,1);
+        factor = size_sub_image /size(sub_image,1);
         scaled = imresize(sub_image,factor,'bicubic');
-        image_binary = imcomplement(rgb2gray(scaled));
-        image_binary = imbinarize(image_binary, binarize_threshold);
+        %figure, imshow(scaled);     
+        image_grayscale = imcomplement(rgb2gray(scaled));
+        
+        % find matching note heads
+        note_head_template = imcomplement(rgb2gray(imread('./note_head.png')));
+        correlation = normxcorr2(note_head_template, image_grayscale);
+        filtered_correlation = correlation > 0.7;
+  
+        image_binary = imbinarize(image_grayscale, binarize_threshold);
 
+        %figure, subplot(1,1,1), imshow(filtered_correlation) ,subplot(1,2,1), imshow(image_binary)
+        figure, imshowpair(image_binary, filtered_correlation, 'montage')
+        
+        
+        new_staff = staffs(staff_no, :)-start_pixel;
+        new_staff = round(new_staff.*factor);
+        
+        
+        kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
+        opened_image = imopen(image_binary,kernel_matrix);
+        %cleaned_image = bwmorph(opened_image, 'clean');
+        %kernel_matrix = [0 0 0; 1 1 1; 0 0 0];
+        %closed_image = imclose(opened_image,kernel_matrix);
+        
+        %horizontal_kernel = [ 0 0 0 0; 1 1 1 1; 0 0 0 0; 0 0 0 0];
+        %opened_image = imopen(opened_image,horizontal_kernel);
+        
+        % IMAGE WITH ONLY NOTE LINES
+        vertical_kernel = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;
+            0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0];
+        %note_line_img = imopen(image_binary, vertical_kernel);
+        %figure, imshow(note_line_img);
+        
+        % IMAGE WITH ONLY NOTE HEADS
+        skewed_circle_kernel = [ 
+            0 0 0 0 0 0 0 0 0 0 0 0;
+            0 0 0 0 1 1 1 1 1 0 0 0;
+            0 0 0 1 1 1 1 1 1 1 0 0;
+            0 0 1 1 1 1 1 1 1 1 1 0;
+            0 1 1 1 1 1 1 1 1 1 1 1;
+            1 1 1 1 1 1 1 1 1 1 1 0;
+            0 1 1 1 1 1 1 1 1 1 0 0;
+            0 0 1 1 1 1 1 1 1 0 0 0;
+            0 0 0 1 1 1 1 1 0 0 0 0;
+            0 0 0 0 0 0 0 0 0 0 0 0;];
+        note_head_img = imopen(image_binary, skewed_circle_kernel);
+        
+
+        %test = normxcorr2(skewed_circle_kernel,image_binary);
+%         grayImage1 = 255 * uint8(note_line_img);
+%         grayImage2 = 255 * uint8(note_head_img);
+%         grayImage3 = 255 * uint8(half_head_img);
+%         combined_image = cat(3, grayImage1, grayImage2, grayImage3);
+        %figure, imshow(test);
+        
+        vertical_summation = sum(opened_image, 1);
+       
+        [pks, locs] = findpeaks(vertical_summation);
+        %figure, imshow(opened_image);
+
+        %figure, plot(locs , pks, '-o')
+        
     end
     
-    %figure, imshow(image_binary);
-
-  
+    %figure, imshow(note_head_img);
+    %figure, bar(vertical_summation);
+    
     something = 'hej';
     
     %imshow(new_rotated_image);
     
     % Segmentation - Thresholding
-    %kernel_matrix = [0 1 0; 1 0 1; 0 1 0];
-    %opened_image = imopen(new_rotated_image,kernel_matrix);
-    %figure, imshow(opened_image);
+    
     %% Segmentation - Cleaning up (removing false objects)
 
     %% Segmentation - Labeling
