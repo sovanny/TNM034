@@ -1,11 +1,11 @@
-function something = tnm034(im)
+%function something = tnm034(im)
     
     % Image Capture
     % Read image file
-
-    %clc
-    %input_image = imread('./Images_Training/im3s.jpg');
-    input_image = imread(im);
+    clear
+    clc
+    input_image = imread('./Images_Training/im10s.jpg');
+    %input_image = imread(im);
 
     % Preprocessing - Make binary
 
@@ -141,7 +141,7 @@ function something = tnm034(im)
 
     binarize_threshold = 0.35;
     size_sub_image = 120;
-       
+    
     for staff_no = 1:size(staffs, 1)
         % Extract each staff
         distance = (staffs(staff_no, 5) - staffs(staff_no, 1) + 1);
@@ -173,11 +173,12 @@ function something = tnm034(im)
         note_head_template = imcomplement(rgb2gray(imread('./note_head.png')));
         correlation = normxcorr2(note_head_template, image_grayscale);
         filtered_correlation = correlation > 0.7;
+        filtered_correlation = filtered_correlation-size(
   
         image_binary = imbinarize(image_grayscale, binarize_threshold);
 
         %figure, subplot(1,1,1), imshow(filtered_correlation) ,subplot(1,2,1), imshow(image_binary)
-        figure, imshowpair(image_binary, filtered_correlation, 'montage')
+        
         
         
         new_staff = staffs(staff_no, :)-start_pixel;
@@ -211,7 +212,7 @@ function something = tnm034(im)
             0 0 1 1 1 1 1 1 1 0 0 0;
             0 0 0 1 1 1 1 1 0 0 0 0;
             0 0 0 0 0 0 0 0 0 0 0 0;];
-        note_head_img = imopen(image_binary, skewed_circle_kernel);
+        %note_head_img = imopen(image_binary, skewed_circle_kernel);
         
 
         %test = normxcorr2(skewed_circle_kernel,image_binary);
@@ -227,10 +228,32 @@ function something = tnm034(im)
         %figure, imshow(opened_image);
 
         %figure, plot(locs , pks, '-o')
-        
+        %figure, imshowpair(opened_image, filtered_correlation, 'montage')
+        labeled_image = bwlabel(filtered_correlation);
+        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))'
+        centroids = regionprops(labeled_image,'centroid');
+        sidemargin = size(note_head_template,1);  
+        figure, imshowpair(image_grayscale,filtered_correlation)
+        hold on
+        outliers = ~isoutlier(areas)
+        areas = areas.*outliers;
+        area_threshold = 0.3 * max(areas);
+        for c = 1:size(centroids,1)
+            position = floor(cell2mat(struct2cell(centroids(c)))');
+            
+            if(areas(c) < area_threshold) %don't make subimage if too small
+                continue
+            end
+            plot(position(1),position(2), 'o')
+            left = max(1,(position(1)-sidemargin));
+            right = min((position(1)+sidemargin), size(opened_image,2));
+            subimage = opened_image(:,left:right);
+        end
+        hold off; 
+
     end
     
-    %figure, imshow(note_head_img);
+    %figure, imshow(labeled_image);
     %figure, bar(vertical_summation);
     
     something = 'hej';

@@ -4,7 +4,7 @@
     % Read image file
     clear
     clc
-    input_image = imread('./Images_Training/im10s.jpg');
+    input_image = imread('./Images_Training/im9s.jpg');
     %input_image = imread(im);
 
     % Preprocessing - Make binary
@@ -57,7 +57,7 @@
     % Segmentation - Detect lines and save position
     % also - do some fine rotation adjustments 
     
-    cropped_image = image_rotated(:,1:(size(image_rotated,2)/2));
+    cropped_image = image_rotated(:,1:floor((size(image_rotated,2)/2)));
     horizontal_summation = sum(cropped_image, 2);
     [pks, locs] = findpeaks(horizontal_summation);
     %plot(pks , locs, '-o')
@@ -170,9 +170,12 @@
         image_grayscale = imcomplement(rgb2gray(scaled));
         
         % find matching note heads
-        note_head_template = imcomplement(rgb2gray(imread('./note_head.png')));
+        %note_head_template = imcomplement(rgb2gray(imread('./note_head.png')));
+        note_head_template = imcomplement(rgb2gray(imread('./note_head_9.png')));
         correlation = normxcorr2(note_head_template, image_grayscale);
-        filtered_correlation = correlation > 0.6;
+        filtered_correlation = correlation > 0.5;
+        filtered_correlation = circshift(filtered_correlation, [-round(size(note_head_template,1)/2), -round(size(note_head_template,2)/2)]);
+
   
         image_binary = imbinarize(image_grayscale, binarize_threshold);
 
@@ -232,9 +235,9 @@
         areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))'
         centroids = regionprops(labeled_image,'centroid');
         sidemargin = size(note_head_template,1);  
-        figure, imshowpair(opened_image,filtered_correlation)
+        figure, imshowpair(image_grayscale,filtered_correlation)
         hold on
-        outliers = ~isoutlier(areas)
+        outliers = areas<25;
         areas = areas.*outliers;
         area_threshold = 0.5 * max(areas);
         for c = 1:size(centroids,1)
@@ -243,7 +246,7 @@
             if(areas(c) < area_threshold) %don't make subimage if too small
                 continue
             end
-            plot(position(1),position(2), 'o')
+            plot(position(1),position(2), 'or')
             left = max(1,(position(1)-sidemargin));
             right = min((position(1)+sidemargin), size(opened_image,2));
             subimage = opened_image(:,left:right);
