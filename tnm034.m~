@@ -1,11 +1,11 @@
-function something = tnm034(im)
+%function something = tnm034(im)
     
     % Image Capture
     % Read image file
-
-    %clc
-    %input_image = imread('./Images_Training/Le_1_Example.jpg');
-    input_image = imread(im);
+    clear
+    clc
+    input_image = imread('./Images_Training/im10s.jpg');
+    %input_image = imread(im);
 
     % Preprocessing - Make binary
 
@@ -130,7 +130,7 @@ function something = tnm034(im)
     staffs = sortrows(staff);
 
    % snurra original-bilden för bästa resultat
-    new_rotated_image = imrotate(input_image, rotAngle + rot_degree);
+    new_rotated_image = imrotate(input_image, rotAngle + rot_degree, 'bicubic');
 
     % ta ut sub-bilder. en för varje staff. gör till samma storlek
     % så vi hela tiden får samma referenskoordinater, så kärnan kan ha samma storlek
@@ -141,7 +141,7 @@ function something = tnm034(im)
 
     binarize_threshold = 0.35;
     size_sub_image = 120;
-       
+    
     for staff_no = 1:size(staffs, 1)
         % Extract each staff
         distance = (staffs(staff_no, 5) - staffs(staff_no, 1) + 1);
@@ -166,34 +166,41 @@ function something = tnm034(im)
         % Resize image to a proper size
         factor = size_sub_image /size(sub_image,1);
         scaled = imresize(sub_image,factor,'bicubic');
-        image_binary = imcomplement(rgb2gray(scaled));
-        image_binary = imbinarize(image_binary, binarize_threshold);
+        %figure, imshow(scaled);     
+        image_grayscale = imcomplement(rgb2gray(scaled));
+        
+        % find matching note heads
+        note_head_template = imcomplement(rgb2gray(imread('./note_head.png')));
+        correlation = normxcorr2(note_head_template, image_grayscale);
+        filtered_correlation = correlation > 0.6;
+  
+        image_binary = imbinarize(image_grayscale, binarize_threshold);
+
+        %figure, subplot(1,1,1), imshow(filtered_correlation) ,subplot(1,2,1), imshow(image_binary)
+        
+        
         
         new_staff = staffs(staff_no, :)-start_pixel;
         new_staff = round(new_staff.*factor);
         
-%         img_copy = image_binary;
-%         for staff_line = 1:5
-%             img_copy(new_staff(staff_line), :) = 0;
-%         end
         
-%         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
-%         eroded_image = imerode(image_binary, kernel_matrix);
-%         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;];
-%         dilated_image = imdilate(eroded_image, kernel_matrix);
-        %opened_image = imopen(image_binary,kernel_matrix);
+        kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
+        opened_image = imopen(image_binary,kernel_matrix);
         %cleaned_image = bwmorph(opened_image, 'clean');
         %kernel_matrix = [0 0 0; 1 1 1; 0 0 0];
         %closed_image = imclose(opened_image,kernel_matrix);
         
+        %horizontal_kernel = [ 0 0 0 0; 1 1 1 1; 0 0 0 0; 0 0 0 0];
+        %opened_image = imopen(opened_image,horizontal_kernel);
+        
         % IMAGE WITH ONLY NOTE LINES
-        kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;
+        vertical_kernel = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;
             0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0];
-        note_line_img = imopen(image_binary, kernel_matrix);
+        %note_line_img = imopen(image_binary, vertical_kernel);
         %figure, imshow(note_line_img);
         
         % IMAGE WITH ONLY NOTE HEADS
-        kernel_matrix = [ 
+        skewed_circle_kernel = [ 
             0 0 0 0 0 0 0 0 0 0 0 0;
             0 0 0 0 1 1 1 1 1 0 0 0;
             0 0 0 1 1 1 1 1 1 1 0 0;
@@ -204,20 +211,50 @@ function something = tnm034(im)
             0 0 1 1 1 1 1 1 1 0 0 0;
             0 0 0 1 1 1 1 1 0 0 0 0;
             0 0 0 0 0 0 0 0 0 0 0 0;];
-        note_head_img = imopen(image_binary, kernel_matrix);
-        %figure, imshow(note_head_img);
-        %figure, imshow(image_binary);
+        %note_head_img = imopen(image_binary, skewed_circle_kernel);
+        
 
-        combined_image(:, :, 1) = note_line_img;
-        combined_image(:,:,2) = note_head_img;
-        combined_image(:,:,3) = 
+        %test = normxcorr2(skewed_circle_kernel,image_binary);
+%         grayImage1 = 255 * uint8(note_line_img);
+%         grayImage2 = 255 * uint8(note_head_img);
+%         grayImage3 = 255 * uint8(half_head_img);
+%         combined_image = cat(3, grayImage1, grayImage2, grayImage3);
+        %figure, imshow(test);
         
-        grayImage = 255 * uint8(note_line_img);
-        RGB = cat(3, grayImage, grayImage, grayImage);
-        figure, imshow(combined_image);
-        
+        vertical_summation = sum(opened_image, 1);
+       
+        [pks, locs] = findpeaks(vertical_summation);
+        %figure, imshow(opened_image);
+
+        %figure, plot(locs , pks, '-o')
+        %figure, imshowpair(opened_image, filtered_correlation, 'montage')
+        labeled_image = bwlabel(filtered_correlation);
+        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))';
+        centroids = regionprops(labeled_image,'centroid');
+        sidemargin = size(note_head_template,1);
+        %area_threshold = 0.5 * max(areas);
+        area_threshold = 10
+        figure, imshowpair(opened_image,filtered_correlation)
+        hold on
+        outliers = ~isoutlier(areas)
+        areas
+        for c = 1:size(centroids,1)
+            position = floor(cell2mat(struct2cell(centroids(c)))');
+            
+            if(areas(c) < area_threshold || areas(c) > 25) %don't make subimage if too small
+                continue
+            end
+            plot(position(1),position(2), 'o')
+            left = max(1,(position(1)-sidemargin));
+            right = min((position(1)+sidemargin), size(opened_image,2));
+            subimage = opened_image(:,left:right);
+        end
+            
+
     end
-
+    
+    %figure, imshow(labeled_image);
+    %figure, bar(vertical_summation);
     
     something = 'hej';
     

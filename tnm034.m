@@ -229,18 +229,18 @@
         %figure, plot(locs , pks, '-o')
         %figure, imshowpair(opened_image, filtered_correlation, 'montage')
         labeled_image = bwlabel(filtered_correlation);
-        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))';
+        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))'
         centroids = regionprops(labeled_image,'centroid');
-        sidemargin = size(note_head_template,1);
-        %area_threshold = 0.5 * max(areas);
-        area_threshold = 10
+        sidemargin = size(note_head_template,1);  
         figure, imshowpair(opened_image,filtered_correlation)
         hold on
-        outliers = isoutlier(areas)
+        outliers = ~isoutlier(areas)
+        areas = areas.*outliers;
+        area_threshold = 0.5 * max(areas);
         for c = 1:size(centroids,1)
             position = floor(cell2mat(struct2cell(centroids(c)))');
             
-            if(areas(c) < area_threshold || areas(c) > 25) %don't make subimage if too small
+            if(areas(c) < area_threshold) %don't make subimage if too small
                 continue
             end
             plot(position(1),position(2), 'o')
@@ -248,7 +248,7 @@
             right = min((position(1)+sidemargin), size(opened_image,2));
             subimage = opened_image(:,left:right);
         end
-            
+        hold off; 
 
     end
     
