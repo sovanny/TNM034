@@ -4,7 +4,7 @@
     % Read image file
     clear
     clc
-    input_image = imread('./Images_Training/im9s.jpg');
+    input_image = imread('./Images_Training/Le_1_Example.jpg');
     %input_image = imread(im);
 
     % Preprocessing - Make binary
@@ -142,6 +142,8 @@
     binarize_threshold = 0.35;
     size_sub_image = 120;
     
+    counter = 0;
+    
     for staff_no = 1:size(staffs, 1)
         % Extract each staff
         distance = (staffs(staff_no, 5) - staffs(staff_no, 1) + 1);
@@ -216,43 +218,61 @@
             0 0 0 0 0 0 0 0 0 0 0 0;];
         %note_head_img = imopen(image_binary, skewed_circle_kernel);
         
-
-        %test = normxcorr2(skewed_circle_kernel,image_binary);
-%         grayImage1 = 255 * uint8(note_line_img);
-%         grayImage2 = 255 * uint8(note_head_img);
-%         grayImage3 = 255 * uint8(half_head_img);
-%         combined_image = cat(3, grayImage1, grayImage2, grayImage3);
-        %figure, imshow(test);
         
-        vertical_summation = sum(opened_image, 1);
-       
-        [pks, locs] = findpeaks(vertical_summation);
-        %figure, imshow(opened_image);
-
-        %figure, plot(locs , pks, '-o')
-        %figure, imshowpair(opened_image, filtered_correlation, 'montage')
         labeled_image = bwlabel(filtered_correlation);
-        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))'
+        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))';
         centroids = regionprops(labeled_image,'centroid');
         sidemargin = size(note_head_template,1);  
-        figure, imshowpair(image_grayscale,filtered_correlation)
-        hold on
+%          figure; imshowpair(image_grayscale,filtered_correlation);
+%          hold on;
         outliers = areas<25;
         areas = areas.*outliers;
         area_threshold = 0.5 * max(areas);
+        staff_step = round((new_staff(5)-new_staff(1))/8);
+        %extended_staff =         
         for c = 1:size(centroids,1)
-            position = floor(cell2mat(struct2cell(centroids(c)))');
+            position = round(cell2mat(struct2cell(centroids(c)))');
             
             if(areas(c) < area_threshold) %don't make subimage if too small
                 continue
             end
-            plot(position(1),position(2), 'or')
+%             plot(position(1),position(2), 'or');
+            
             left = max(1,(position(1)-sidemargin));
             right = min((position(1)+sidemargin), size(opened_image,2));
             subimage = opened_image(:,left:right);
-        end
-        hold off; 
+            horizontal_kernel = [ 0 0 0 0 0 ; 1 1 1 1 1; 0 0 0 0 0];
+            subimage = imopen(subimage,horizontal_kernel);
+            %subimage = bwmorph(subimage, 'majority');
 
+            vert_proj_subimg = sum(subimage, 2);
+            [pks, locs] = findpeaks(vert_proj_subimg);
+            %figure, plot(vert_proj_subimg);
+            subarray = vert_proj_subimg(position(2)-8:position(2)+8);
+            % check if it is a note head
+            centroid_width = vert_proj_subimg(position(2));
+            if(centroid_width < 9 || centroid_width > 17 || (min(subarray) > 0))
+
+                continue;
+            end
+            
+            % check note head position to determine pitch
+            counter = counter + 1
+
+            position(2)
+            
+            
+            % remove peaks below a certain value
+            filter = vert_proj_subimg > 6;
+            vert_proj_subimg = vert_proj_subimg.*filter;
+            
+             figure('Name',num2str(counter)), imshow(subimage);
+%             figure, plot(vert_proj_subimg);
+                
+        end
+%          hold off; 
+
+        
     end
     
     %figure, imshow(labeled_image);
