@@ -4,7 +4,7 @@
     % Read image file
     clear
     clc
-    input_image = imread('./Images_Training/im6s.jpg');
+    input_image = imread('./Images_Training/Le_1_Example.jpg');
     %input_image = imread(im);
 
     % Preprocessing - Make binary
@@ -221,15 +221,28 @@
         
         labeled_image = bwlabel(filtered_correlation);
         areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))';
-        centroids = regionprops(labeled_image,'centroid')
+        centroids = regionprops(labeled_image,'centroid');
         sidemargin = size(note_head_template,1);  
 %          figure; imshowpair(image_grayscale,filtered_correlation);
 %          hold on;
         outliers = areas<25;
         areas = areas.*outliers;
         area_threshold = 0.5 * max(areas);
+        staff_step = (new_staff(5)-new_staff(1))/8;
+        extended_staff = [];
+        extended_staff(1:6) = (new_staff(1)-(staff_step*6)):staff_step:new_staff(1)-staff_step;
+        extended_staff(7) = new_staff(1);
+        extended_staff(8) = new_staff(1) + ((new_staff(2)-new_staff(1))/2);
+        extended_staff(9) = new_staff(2);
+        extended_staff(10) = new_staff(2) + ((new_staff(3)-new_staff(2))/2);
+        extended_staff(11) = new_staff(3);
+        extended_staff(12) = new_staff(3) + ((new_staff(4)-new_staff(3))/2);
+        extended_staff(13) = new_staff(4);
+        extended_staff(14) = new_staff(4) + ((new_staff(5)-new_staff(4))/2);
+        extended_staff(15) = new_staff(5);
+        extended_staff(16:20) = new_staff(5)+staff_step:staff_step:new_staff(1)-staff_step;
         for c = 1:size(centroids,1)
-            position = floor(cell2mat(struct2cell(centroids(c)))');
+            position = round(cell2mat(struct2cell(centroids(c)))');
             
             if(areas(c) < area_threshold) %don't make subimage if too small
                 continue
@@ -242,28 +255,35 @@
             horizontal_kernel = [ 0 0 0 0 0 ; 1 1 1 1 1; 0 0 0 0 0];
             subimage = imopen(subimage,horizontal_kernel);
             %subimage = bwmorph(subimage, 'majority');
-            counter = counter + 1
 
             vert_proj_subimg = sum(subimage, 2);
             [pks, locs] = findpeaks(vert_proj_subimg);
             %figure, plot(vert_proj_subimg);
-            subarray = vert_proj_subimg(position(2)-8:position(2)+8)
+            subarray = vert_proj_subimg(position(2)-8:position(2)+8);
             % check if it is a note head
-            centroid_width = vert_proj_subimg(position(2))
+            centroid_width = vert_proj_subimg(position(2));
             if(centroid_width < 9 || centroid_width > 17 || (min(subarray) > 0))
 
                 continue;
             end
             
             % check note head position to determine pitch
+            counter = counter + 1
+
+            position(2)
+            
+            
+                subimage(extended_staff,:) = 1;
+            
             
             
             % remove peaks below a certain value
             filter = vert_proj_subimg > 6;
             vert_proj_subimg = vert_proj_subimg.*filter;
             
-            figure('Name',num2str(counter)), imshow(subimage);
-            figure, plot(vert_proj_subimg);
+              figure('Name',num2str(counter)), imshow(subimage);
+%              figure, plot(vert_proj_subimg);
+            
                 
         end
 %          hold off; 

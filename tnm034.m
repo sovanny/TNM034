@@ -228,8 +228,19 @@
         outliers = areas<25;
         areas = areas.*outliers;
         area_threshold = 0.5 * max(areas);
-        staff_step = round((new_staff(5)-new_staff(1))/8);
-        %extended_staff =         
+        staff_step = (new_staff(5)-new_staff(1))/8;
+        extended_staff = [];
+        extended_staff(1:6) = (new_staff(1)-(staff_step*6)):staff_step:new_staff(1)-staff_step;
+        extended_staff(7) = new_staff(1);
+        extended_staff(8) = new_staff(1) + ((new_staff(2)-new_staff(1))/2);
+        extended_staff(9) = new_staff(2);
+        extended_staff(10) = new_staff(2) + ((new_staff(3)-new_staff(2))/2);
+        extended_staff(11) = new_staff(3);
+        extended_staff(12) = new_staff(3) + ((new_staff(4)-new_staff(3))/2);
+        extended_staff(13) = new_staff(4);
+        extended_staff(14) = new_staff(4) + ((new_staff(5)-new_staff(4))/2);
+        extended_staff(15) = new_staff(5);
+        extended_staff(16:20) = new_staff(5)+staff_step:staff_step:new_staff(5)+(staff_step*5);
         for c = 1:size(centroids,1)
             position = round(cell2mat(struct2cell(centroids(c)))');
             
@@ -261,13 +272,20 @@
 
             position(2)
             
+            for i = 1:20
+                pos = round(extended_staff(i));
+                subimage(pos,:) = 1;
+            end
+            
+            
             
             % remove peaks below a certain value
             filter = vert_proj_subimg > 6;
             vert_proj_subimg = vert_proj_subimg.*filter;
             
-             figure('Name',num2str(counter)), imshow(subimage);
-%             figure, plot(vert_proj_subimg);
+              figure('Name',num2str(counter)), imshow(subimage);
+%              figure, plot(vert_proj_subimg);
+            
                 
         end
 %          hold off; 
