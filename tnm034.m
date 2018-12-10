@@ -1,12 +1,18 @@
-%function something = tnm034(im)
+%function outstr = tnm034(im)
     
     % Image Capture
     % Read image file
-    clear
-    clc
-    input_image = imread('./Images_Training/Le_1_Example.jpg');
-    %input_image = imread(im);
 
+    input_image = imread('./Images_Training/im6s.jpg');
+    %input_image = imread(im);
+    
+    lookup_note_table = [ 'e4'; 'd4'; 'c4'; 'b3'; 'a3'; 'g3';
+                          'f3'; 'e3'; 'd3'; 'c3'; 'b2'; 'a2';
+                          'g2'; 'f2'; 'e2'; 'd2'; 'c2'; 'b1';
+                          'a1'; 'g1'];
+             
+    output_chars = '';
+    
     % Preprocessing - Make binary
 
     % convert to grayscale and invert
@@ -257,8 +263,7 @@
             %subimage = bwmorph(subimage, 'majority');
 
             vert_proj_subimg = sum(subimage, 2);
-            [pks, locs] = findpeaks(vert_proj_subimg);
-            %figure, plot(vert_proj_subimg);
+           
             subarray = vert_proj_subimg(position(2)-8:position(2)+8);
             % check if it is a note head
             centroid_width = vert_proj_subimg(position(2));
@@ -268,14 +273,15 @@
             end
             
             % check note head position to determine pitch
-            counter = counter + 1
-
-            position(2)
+            counter = counter + 1;
+            [c index] = min(abs(extended_staff-position(2)));   
             
-            for i = 1:20
-                pos = round(extended_staff(i));
-                subimage(pos,:) = 1;
-            end
+            
+            % plotta staff lines
+%             for i = 1:20
+%                 pos = round(extended_staff(i));
+%                 subimage(pos,:) = 1;
+%             end
             
             
             
@@ -283,20 +289,42 @@
             filter = vert_proj_subimg > 6;
             vert_proj_subimg = vert_proj_subimg.*filter;
             
-              figure('Name',num2str(counter)), imshow(subimage);
-%              figure, plot(vert_proj_subimg);
+            % remove peaks for note head??
+            
+            conv_filter = [1/9 1/9 1/9 1/9 1/9 1/9 1/9 1/9 1/9 ];
+            conv_peaks = conv(vert_proj_subimg, conv_filter);
+            
+            [pks, locs] = findpeaks(conv_peaks);
+           
+             figure, plot(conv_peaks)
+  
+             
+             % if there are exactly one peak, return eight, if two return
+             % quarter
+             if(length(pks) == 1)
+                 output_chars = strcat(output_chars, upper(lookup_note_table(index,:)));
+             elseif(length(pks) == 2)
+                 output_chars = strcat(output_chars, lookup_note_table(index,:));
+             else
+                 figure('Name',num2str(counter)), imshow(subimage);
+                 %figure, plot(pks, locs);
+                 figure, plot(conv_peaks)
+                 counter
+                 length(pks)
+                 
+             end
             
                 
         end
 %          hold off; 
 
-        
+        output_chars = strcat(output_chars, 'n');
     end
     
     %figure, imshow(labeled_image);
     %figure, bar(vertical_summation);
     
-    something = 'hej';
+    outstr = convertCharsToStrings(output_chars)
     
     %imshow(new_rotated_image);
     
