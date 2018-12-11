@@ -1,10 +1,7 @@
-%function outstr = tnm034(im)
-    
-    % Image Capture
-    % Read image file
-
-    input_image = imread('./Images_Training/im6s.jpg');
-    %input_image = imread(im);
+function outstr = tnm034(im)
+ 
+    %input_image = imread('./Images_Training/im6s.jpg');
+    input_image = imread(im);
     
     lookup_note_table = [ 'e4'; 'd4'; 'c4'; 'b3'; 'a3'; 'g3';
                           'f3'; 'e3'; 'd3'; 'c3'; 'b2'; 'a2';
@@ -13,45 +10,18 @@
              
     output_chars = '';
     
-    % Preprocessing - Make binary
-
-    % convert to grayscale and invert
+    % Convert to grayscale and make binary
     image_binary = imcomplement(rgb2gray(input_image));
-
-    % binarizes image I with a global threshold computed using Otsu's method
     image_binary = imbinarize(image_binary, 'adaptive');
-    % testa andra trösklar, ljusgråa linjer kommer med nu
 
-    % thicken to make thin lines really POP
+    % Thicken to make thin lines thicker
     thickened_image = bwmorph(image_binary,'thicken', 1) ;
 
-    % Preprocessing
-    % - Geometric restoration,Photometric  restoration,Noise removal?
-
-    % Preprocessing - Detection of lines and edges, to rotate
-    % - Staff lines must be located and rotated. May be removed.
-
+    % Use Hough to detect straight lines
     [H,T,R] = hough(thickened_image,'Theta',-90: 0.1 : 89.9);
     P  = houghpeaks(H, 1000); 
-    %imshow(H,[],'XData',T,'YData',R,'InitialMagnification','fit');
-    %xlabel('\theta'), ylabel('\rho');
-    %axis on, axis normal, hold on;
-    % show white boxes where peaks are
-    %plot(T(P(:,2)),R(P(:,1)),'s','color','white');
 
-    %
-    % min length of line is based on image width
-    min_length_staff_lines = floor(0.2*size(input_image,2));
-
-    lines = houghlines(thickened_image,T,R,P,'FillGap',10,'MinLength',min_length_staff_lines);
-    %figure, imshow(image_binary), hold on;
-    for k = 1:length(lines)
-       xy = [lines(k).point1; lines(k).point2];
-       %plot(xy(:,1),xy(:,2),'LineWidth',2,'Color','green');
-    end
-
-    %  Rotate
-
+    %  Rough rotation - based on most frequent angles detected by Hough
     most_frequent_angle = mode(T(P(:,2)));
     if(most_frequent_angle < 0)
         rotAngle = 90+most_frequent_angle;
@@ -60,22 +30,15 @@
     end
     image_rotated = imrotate(image_binary, rotAngle, 'bicubic');
 
-    % Segmentation - Detect lines and save position
-    % also - do some fine rotation adjustments 
-    
+    % Fine rotation - fine tune the rotation by rotating 0.1 degrees in
+    % both direction until peaks are found, using horizontal projection on
+    % half of the image (consider last  staff can be short)
     cropped_image = image_rotated(:,1:floor((size(image_rotated,2)/2)));
-    horizontal_summation = sum(cropped_image, 2);
-    [pks, locs] = findpeaks(horizontal_summation);
-    %plot(pks , locs, '-o')
-
-    % rotate by 0.01 degrees to find max
     highest_maxes = 0;
     rot_degree = 0;
-
     for degree = -0.1:0.01:0.1
         temp_sum = sum(imrotate(cropped_image, degree, 'bicubic'), 2);
-        [temp_pks, temp_locs] = findpeaks(temp_sum);
-        
+        [temp_pks, temp_locs] = findpeaks(temp_sum);     
         % For premium users only!
         %highest_val = sum(maxk(temp_pks, 5)); F
         sv = sort(temp_pks, 'descend');
@@ -88,10 +51,8 @@
         end
     end
 
-    %new_rotated_cropped_image = imrotate(cropped_image, rot_degree);
-    %new_rotated_image = imrotate(image_rotated, rot_degree);
 
-    % save positions
+    % Save positions of peaks
     % Premium user? Use maxk!
     sorted_vals = sort(highest_peaks,'descend');
     top_ten = sorted_vals(1:10);
@@ -174,63 +135,30 @@
         % Resize image to a proper size
         factor = size_sub_image /size(sub_image,1);
         scaled = imresize(sub_image,factor,'bicubic');
-        %figure, imshow(scaled);     
+    
         image_grayscale = imcomplement(rgb2gray(scaled));
         
         % find matching note heads
-        %note_head_template = imcomplement(rgb2gray(imread('./note_head.png')));
         note_head_template = imcomplement(rgb2gray(imread('./note_head_9.png')));
         correlation = normxcorr2(note_head_template, image_grayscale);
         filtered_correlation = correlation > 0.5;
+        % move results to 
         filtered_correlation = circshift(filtered_correlation, [-round(size(note_head_template,1)/2), -round(size(note_head_template,2)/2)]);
-
   
         image_binary = imbinarize(image_grayscale, binarize_threshold);
 
-        %figure, subplot(1,1,1), imshow(filtered_correlation) ,subplot(1,2,1), imshow(image_binary)
-        
-        
-        
+  
         new_staff = staffs(staff_no, :)-start_pixel;
         new_staff = round(new_staff.*factor);
         
         
         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
-        opened_image = imopen(image_binary,kernel_matrix);
-        %cleaned_image = bwmorph(opened_image, 'clean');
-        %kernel_matrix = [0 0 0; 1 1 1; 0 0 0];
-        %closed_image = imclose(opened_image,kernel_matrix);
-        
-        %horizontal_kernel = [ 0 0 0 0; 1 1 1 1; 0 0 0 0; 0 0 0 0];
-        %opened_image = imopen(opened_image,horizontal_kernel);
-        
-        % IMAGE WITH ONLY NOTE LINES
-        vertical_kernel = [0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0;
-            0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0; 0 1 0];
-        %note_line_img = imopen(image_binary, vertical_kernel);
-        %figure, imshow(note_line_img);
-        
-        % IMAGE WITH ONLY NOTE HEADS
-        skewed_circle_kernel = [ 
-            0 0 0 0 0 0 0 0 0 0 0 0;
-            0 0 0 0 1 1 1 1 1 0 0 0;
-            0 0 0 1 1 1 1 1 1 1 0 0;
-            0 0 1 1 1 1 1 1 1 1 1 0;
-            0 1 1 1 1 1 1 1 1 1 1 1;
-            1 1 1 1 1 1 1 1 1 1 1 0;
-            0 1 1 1 1 1 1 1 1 1 0 0;
-            0 0 1 1 1 1 1 1 1 0 0 0;
-            0 0 0 1 1 1 1 1 0 0 0 0;
-            0 0 0 0 0 0 0 0 0 0 0 0;];
-        %note_head_img = imopen(image_binary, skewed_circle_kernel);
-        
-        
+        opened_image = imopen(image_binary,kernel_matrix); 
+       
         labeled_image = bwlabel(filtered_correlation);
         areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))';
         centroids = regionprops(labeled_image,'centroid');
         sidemargin = size(note_head_template,1);  
-%          figure; imshowpair(image_grayscale,filtered_correlation);
-%          hold on;
         outliers = areas<25;
         areas = areas.*outliers;
         area_threshold = 0.5 * max(areas);
@@ -253,14 +181,12 @@
             if(areas(c) < area_threshold) %don't make subimage if too small
                 continue
             end
-%             plot(position(1),position(2), 'or');
-            
+       
             left = max(1,(position(1)-sidemargin));
             right = min((position(1)+sidemargin), size(opened_image,2));
             subimage = opened_image(:,left:right);
             horizontal_kernel = [ 0 0 0 0 0 ; 1 1 1 1 1; 0 0 0 0 0];
             subimage = imopen(subimage,horizontal_kernel);
-            %subimage = bwmorph(subimage, 'majority');
 
             vert_proj_subimg = sum(subimage, 2);
            
@@ -274,17 +200,8 @@
             
             % check note head position to determine pitch
             counter = counter + 1;
-            [c index] = min(abs(extended_staff-position(2)));   
-            
-            
-            % plotta staff lines
-%             for i = 1:20
-%                 pos = round(extended_staff(i));
-%                 subimage(pos,:) = 1;
-%             end
-            
-            
-            
+            [~, index] = min(abs(extended_staff-position(2)));   
+                    
             % remove peaks below a certain value
             filter = vert_proj_subimg > 6;
             vert_proj_subimg = vert_proj_subimg.*filter;
@@ -294,51 +211,17 @@
             conv_filter = [1/9 1/9 1/9 1/9 1/9 1/9 1/9 1/9 1/9 ];
             conv_peaks = conv(vert_proj_subimg, conv_filter);
             
-            [pks, locs] = findpeaks(conv_peaks);
-           
-             figure, plot(conv_peaks)
-  
-             
+            [pks, ~] = findpeaks(conv_peaks);
+            
              % if there are exactly one peak, return eight, if two return
              % quarter
              if(length(pks) == 1)
                  output_chars = strcat(output_chars, upper(lookup_note_table(index,:)));
              elseif(length(pks) == 2)
-                 output_chars = strcat(output_chars, lookup_note_table(index,:));
-             else
-                 figure('Name',num2str(counter)), imshow(subimage);
-                 %figure, plot(pks, locs);
-                 figure, plot(conv_peaks)
-                 counter
-                 length(pks)
-                 
-             end
-            
-                
+                 output_chars = strcat(output_chars, lookup_note_table(index,:));         
+             end           
         end
-%          hold off; 
-
         output_chars = strcat(output_chars, 'n');
     end
-    
-    %figure, imshow(labeled_image);
-    %figure, bar(vertical_summation);
-    
+
     outstr = convertCharsToStrings(output_chars)
-    
-    %imshow(new_rotated_image);
-    
-    % Segmentation - Thresholding
-    
-    %% Segmentation - Cleaning up (removing false objects)
-
-    %% Segmentation - Labeling
-
-
-
-    %% Classification
-    % - Criteria:  length, area, circumference, form, color, texture
-    % - Decision theory
-
-    %% Symbolic description (output)
-
