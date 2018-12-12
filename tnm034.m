@@ -18,7 +18,7 @@ function outstr = tnm034(im)
     thickened_image = bwmorph(image_binary,'thicken', 1) ;
 
     % Use Hough to detect straight lines
-    [H,T,R] = hough(thickened_image,'Theta',-90: 0.1 : 89.9);
+    [H,T,~] = hough(thickened_image,'Theta',-90: 0.1 : 89.9);
     P  = houghpeaks(H, 1000); 
 
     %  Rough rotation - based on most frequent angles detected by Hough
@@ -39,8 +39,6 @@ function outstr = tnm034(im)
     for degree = -0.1:0.01:0.1
         temp_sum = sum(imrotate(cropped_image, degree, 'bicubic'), 2);
         [temp_pks, temp_locs] = findpeaks(temp_sum);     
-        % For premium users only!
-        %highest_val = sum(maxk(temp_pks, 5)); F
         sv = sort(temp_pks, 'descend');
         highest_val = sum(sv(1:5));
         if(highest_val > highest_maxes)
@@ -51,14 +49,13 @@ function outstr = tnm034(im)
         end
     end
 
-
     % Save positions of peaks
-    % Premium user? Use maxk!
     sorted_vals = sort(highest_peaks,'descend');
     top_ten = sorted_vals(1:10);
     
     peak_threshold = floor(0.7* median(top_ten));
     % thresholds the values so that the lower ones are zero
+    % to find the correct staff lines and remove unwanted stuff
     filtered_peaks = highest_peaks.*(highest_peaks>peak_threshold);
     y_positions = highest_locs(filtered_peaks>0);
 
@@ -68,15 +65,13 @@ function outstr = tnm034(im)
     peak_size = size(y_positions,1);
     tolerable_distance = 5000;
 
-    % Looping through all our maxima lines, to extract positions of the staff
-    % lines
+    % Looping through all our maxima, to extract positions of the lines
     while(peak_size>=5)
         cluster = y_positions(1:5);
         previous_distance = cluster(5,1) - cluster(1,1);
         for pos = 1:1:peak_size-5
-
             % Here we check if the distance between the first found line and
-            % the last found line in the cluster
+            % the fifth found line in the cluster
             if(previous_distance > (y_positions(5+pos) - y_positions(1+pos)) && (y_positions(5+pos) - y_positions(1+pos)) < tolerable_distance)
                 cluster = y_positions(1+pos:5+pos);
                 previous_distance = (y_positions(5+pos) - y_positions(1+pos));
@@ -84,32 +79,27 @@ function outstr = tnm034(im)
         end
         staff(no_rows,:) = cluster(:);
         no_rows = no_rows + 1;
-
         % Deleting rows from the y_positions
         for ind = 1:1:5
             y_positions(y_positions == cluster(ind,1)) = [];
         end
         tolerable_distance = floor(previous_distance*1.2);
         peak_size = size(y_positions,1);
-
     end
 
     staffs = sortrows(staff);
 
-   % snurra original-bilden för bästa resultat
+    % rotate the original image for optimal precision
     new_rotated_image = imrotate(input_image, rotAngle + rot_degree, 'bicubic');
 
-    % ta ut sub-bilder. en för varje staff. gör till samma storlek
-    % så vi hela tiden får samma referenskoordinater, så kärnan kan ha samma storlek
+    % extract subimages, one for each staff, and scale them to have same
+    % height, in order for all subimages to have the same relative staff line
+    % positons
     margin_up = 0.88;
     margin_down = 0.75;
-
     img_height = size(new_rotated_image,1);
-
     binarize_threshold = 0.35;
     size_sub_image = 120;
-    
-    counter = 0;
     
     for staff_no = 1:size(staffs, 1)
         % Extract each staff
@@ -127,7 +117,9 @@ function outstr = tnm034(im)
             padding_bot = end_pixel - img_height;
             end_pixel = img_height;
         end
-      
+        
+        % Pad image to avoid getting out of bounds on images where the top
+        % and bottom of image is close to the edge of the image
         sub_image = new_rotated_image(start_pixel:end_pixel, :,:);
         sub_image = padarray(sub_image,[padding_top 0], 255, 'pre');
         sub_image = padarray(sub_image,[padding_bot 0], 255, 'post');
@@ -135,33 +127,35 @@ function outstr = tnm034(im)
         % Resize image to a proper size
         factor = size_sub_image /size(sub_image,1);
         scaled = imresize(sub_image,factor,'bicubic');
-    
         image_grayscale = imcomplement(rgb2gray(scaled));
         
-        % find matching note heads
+        % find matching note heads using template matching. the template
+        % comes from the training data.
         note_head_template = imcomplement(rgb2gray(imread('./note_head_9.png')));
         correlation = normxcorr2(note_head_template, image_grayscale);
         filtered_correlation = correlation > 0.5;
-        % move results to 
+        
+        % move results to center of note head, since the correlation
+        % results are shifted
         filtered_correlation = circshift(filtered_correlation, [-round(size(note_head_template,1)/2), -round(size(note_head_template,2)/2)]);
-  
         image_binary = imbinarize(image_grayscale, binarize_threshold);
 
-  
+        % Shift staff line coordinate system
         new_staff = staffs(staff_no, :)-start_pixel;
-        new_staff = round(new_staff.*factor);
+        new_staff = round(new_staff.*factor);      
         
-        
+        % Remove staff lines by opening with vertical kernel
         kernel_matrix = [0 1 0; 0 1 0; 0 1 0; 0 1 0];
         opened_image = imopen(image_binary,kernel_matrix); 
-       
-        labeled_image = bwlabel(filtered_correlation);
-        areas = cell2mat(struct2cell(regionprops(labeled_image,'Area')))';
-        centroids = regionprops(labeled_image,'centroid');
+        % Extract Area and Centroid properties from bwlabel
+        areas = cell2mat(struct2cell(regionprops(filtered_correlation,'Area')))';
+        centroids = regionprops(filtered_correlation,'centroid');
         sidemargin = size(note_head_template,1);  
-        outliers = areas<25;
-        areas = areas.*outliers;
+        % Filter out outliers (non-notes) using area
+        areas = areas.*(areas<25);
         area_threshold = 0.5 * max(areas);
+        % Create and extended staff line vector that includes an element
+        % for each staff line , ranging from e4 to g1
         staff_step = (new_staff(5)-new_staff(1))/8;
         extended_staff = [];
         extended_staff(1:6) = (new_staff(1)-(staff_step*6)):staff_step:new_staff(1)-staff_step;
@@ -176,45 +170,45 @@ function outstr = tnm034(im)
         extended_staff(15) = new_staff(5);
         extended_staff(16:20) = new_staff(5)+staff_step:staff_step:new_staff(5)+(staff_step*5);
         for c = 1:size(centroids,1)
-            position = round(cell2mat(struct2cell(centroids(c)))');
-            
+            % centroid position (middle of note head)
+            position = round(cell2mat(struct2cell(centroids(c)))');    
             if(areas(c) < area_threshold) %don't make subimage if too small
                 continue
             end
-       
+            
+            % make a sub image for each note
             left = max(1,(position(1)-sidemargin));
             right = min((position(1)+sidemargin), size(opened_image,2));
             subimage = opened_image(:,left:right);
+            % remove stem by opening
             horizontal_kernel = [ 0 0 0 0 0 ; 1 1 1 1 1; 0 0 0 0 0];
             subimage = imopen(subimage,horizontal_kernel);
 
-            vert_proj_subimg = sum(subimage, 2);
-           
-            subarray = vert_proj_subimg(position(2)-8:position(2)+8);
+            % make horizontal projection by summation
+            horiz_proj_subimg = sum(subimage, 2);
+            subarray = horiz_proj_subimg(position(2)-8:position(2)+8);
             % check if it is a note head
-            centroid_width = vert_proj_subimg(position(2));
+            centroid_width = horiz_proj_subimg(position(2));
+            % don't classify if the detected centroid is not locatedin a note head 
+            % ( it is too small or too big to be a note head)
             if(centroid_width < 9 || centroid_width > 17 || (min(subarray) > 0))
-
-                continue;
+                continue; 
             end
-            
+         
             % check note head position to determine pitch
-            counter = counter + 1;
             [~, index] = min(abs(extended_staff-position(2)));   
                     
             % remove peaks below a certain value
-            filter = vert_proj_subimg > 6;
-            vert_proj_subimg = vert_proj_subimg.*filter;
+            filter = horiz_proj_subimg > 6;
+            horiz_proj_subimg = horiz_proj_subimg.*filter;
             
-            % remove peaks for note head??
-            
+            % Convolve in order to "smoothen" spikey peaks
             conv_filter = [1/9 1/9 1/9 1/9 1/9 1/9 1/9 1/9 1/9 ];
-            conv_peaks = conv(vert_proj_subimg, conv_filter);
-            
+            conv_peaks = conv(horiz_proj_subimg, conv_filter);         
             [pks, ~] = findpeaks(conv_peaks);
             
-             % if there are exactly one peak, return eight, if two return
-             % quarter
+             % if there is exactly one peak, return quarter, if two peaks 
+             % return eigth
              if(length(pks) == 1)
                  output_chars = strcat(output_chars, upper(lookup_note_table(index,:)));
              elseif(length(pks) == 2)
